@@ -1,16 +1,50 @@
-.app-header {
-    border: 2px solid black;
-    display: flex;
-    flex-direction:row;
-    width: '90%';
-    justify-content:space-evenly;
-    align-items: center;
+#container{
+    
+    display:grid;
+    grid-template-columns: 50%,50%;
+    grid-template-rows: 10%,40%,40%;
 }
 
-.header_input{
-    /*border: 2px solid red;*/
-    width: '40%'
+#app-header {
+    border: 2px solid black;
+    grid-column-start: 1;
+    grid-column-end: 4;
+    grid-row-start: 1;
+    grid-row-end:2;
+    display: flex;
+    flex-direction:row;
+    justify-content:space-evenly;
+    align-items: center;
+    column-gap:3px;
+}
 
+
+.header_input{
+    border: 2px solid red;
+    width: 30%;
+
+}*/
+#airportMap{
+    
+    grid-column-start: 1;
+    grid-column-end: 2;
+    grid-row-start: 2;
+    grid-row-end:4;
+
+}
+#rpanel1{
+    grid-column-start: 2;
+    grid-column-end: 3;
+    grid-row-start:2;
+    grid-row-end:3;
+}
+
+#rpanel2{
+    
+    grid-column-start: 2;
+    grid-column-end: 3;
+    grid-row-start: 3;
+    grid-row-end:4;
 }
 
 body{

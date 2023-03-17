@@ -1,27 +1,32 @@
 from dash import Dash, html, dcc, Input, Output
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
 from datetime import date
 
 external_stylesheets = ['watch.css']
 logo_path='assets/logo.png'
 app = Dash(__name__, external_stylesheets=external_stylesheets)
 
-df = pd.read_csv('https://plotly.github.io/datasets/country_indicators.csv')
+with open("assets/airports_of_concern.json") as file:
+    airports=pd.read_json(file).T
+
+iata_to_name=airports["name"].to_dict()
+drop_d_dic=airports[["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
+
+#---Define Components
 
 #departure point input form element
 dep_input_element=html.Div([
     "Departure Point:",
     dcc.Dropdown(
-        df['Indicator Name'].unique(),
-        'Fertility rate, total (births per woman)',
-        id='crossfilter-xaxis-column'),
-    dcc.RadioItems(
-        ['Linear', 'Log'],
-        'Linear',
-        id='crossfilter-xaxis-type',
-        labelStyle={'display': 'inline-block', 'marginTop': '5px'}
-    )],
+        drop_d_dic,
+        'Departure Airport',
+        id='dep_select',
+        ),
+        
+   ],
     className="header_input",
     style={'display': 'inline-block'})
 
@@ -29,14 +34,8 @@ dep_input_element=html.Div([
 arr_input_elemnet=html.Div([
     "Arrival:",
     dcc.Dropdown(
-        df['Indicator Name'].unique(),
-        'Life expectancy at birth, total (years)',
-        id='crossfilter-yaxis-column' ),
-    dcc.RadioItems(
-        ['Linear', 'Log'],
-        'Linear',
-        id='crossfilter-yaxis-type',
-        labelStyle={'display': 'inline-block', 'marginTop': '5px'})
+        id='arr_select' ),
+    
     ],
     className="header_input",
     style={'display': 'inline-block'}
@@ -44,7 +43,7 @@ arr_input_elemnet=html.Div([
 
 #departure date input form element
 date_input_element=html.Div([
-    "Departure window:",
+    "Departure window:",html.Br(),
     dcc.DatePickerRange(
         id="date_input",
         min_date_allowed=date.today(), #set this to todays date
@@ -55,6 +54,9 @@ date_input_element=html.Div([
     style={'display': 'inline-block'})
 
 
+
+
+#--- add components to virtual DOM
 app.layout = html.Div([
     #header
     html.Div([
@@ -63,105 +65,87 @@ app.layout = html.Div([
         arr_input_elemnet,
         date_input_element,
         ],
-        style={
-            'padding': '10px 5px'
-            },
-        className="app-header"
+        id="app-header"
         ),
-
+    #Plots
     html.Div([
+        #left Panel
         dcc.Graph(
-            id='crossfilter-indicator-scatter',
-            hoverData={'points': [{'customdata': 'Japan'}]}
+            id='airportMap',
         )
-    ], style={'width': '49%', 'display': 'inline-block', 'padding': '0 20'}),
+    ]),
     html.Div([
-        dcc.Graph(id='x-time-series'),
-        dcc.Graph(id='y-time-series'),
-    ], style={'display': 'inline-block', 'width': '49%'}),
+        #right panel
+        dcc.Graph(id='rpanel1'),
+        dcc.Graph(id='rpanel2'),
+    ]),
 
-    html.Div(dcc.Slider(
-        df['Year'].min(),
-        df['Year'].max(),
-        step=None,
-        id='crossfilter-year--slider',
-        value=df['Year'].max(),
-        marks={str(year): str(year) for year in df['Year'].unique()}
-    ), style={'width': '49%', 'padding': '0px 20px 20px 20px'})
-])
+], id="container")
+
+#--- link DOM elements to data and events
+#update arrival airport with departure airport connections
+
+@app.callback(
+        Output("arr_select","value"),
+        Input("dep_select","value")
+)
+def clearArrivalAirport(_):
+    return ""
+
 
 
 @app.callback(
-    Output('crossfilter-indicator-scatter', 'figure'),
-    Input('crossfilter-xaxis-column', 'value'),
-    Input('crossfilter-yaxis-column', 'value'),
-    Input('crossfilter-xaxis-type', 'value'),
-    Input('crossfilter-yaxis-type', 'value'),
-    Input('crossfilter-year--slider', 'value'))
-def update_graph(xaxis_column_name, yaxis_column_name,
-                 xaxis_type, yaxis_type,
-                 year_value):
-    dff = df[df['Year'] == year_value]
+     Output("arr_select","options"),
+     Input("dep_select","value"),   
+)
+def genConnections(departureA):
+    #updates arrival airport dropdown label/value options
+    selected_row=airports[airports["iata"]==departureA]
+    #return blank if departure airport not in data - prevents start up warning
+    if departureA not in airports.index:
+        return {}
+    connections=selected_row.allowed_destination[0]
+    # returns list of dics of connecting flights in the form {label:<name>,value:<iata>}
+    return airports.loc[connections,["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
 
-    fig = px.scatter(x=dff[dff['Indicator Name'] == xaxis_column_name]['Value'],
-            y=dff[dff['Indicator Name'] == yaxis_column_name]['Value'],
-            hover_name=dff[dff['Indicator Name'] == yaxis_column_name]['Country Name']
-            )
 
-    fig.update_traces(customdata=dff[dff['Indicator Name'] == yaxis_column_name]['Country Name'])
+@app.callback(
+    Output('airportMap', 'figure'),
+    Input('dep_select', 'value'),
+    Input("arr_select","value"),
+)
+#Airport Marker Map
+def genAirportMap(departureA,arrivalA):
+    f_airports=airports.copy()
+    
 
-    fig.update_xaxes(title=xaxis_column_name, type='linear' if xaxis_type == 'Linear' else 'log')
+    #create column in data frame indicationg if airport is departure/connection/arrival
 
-    fig.update_yaxes(title=yaxis_column_name, type='linear' if yaxis_type == 'Linear' else 'log')
+    #creates a column with map color based on selection status
+    f_airports["selection"]="black"
+    f_airports.loc[departureA,"selection"]="red"
+    connections=f_airports.loc[departureA,"allowed_destination"]
+    f_airports.loc[connections,"selection"]="aqua"
+    f_airports.loc[arrivalA,"selection"]="orange"
 
-    fig.update_layout(margin={'l': 40, 'b': 40, 't': 10, 'r': 0}, hovermode='closest')
-
+   
+    fig=go.Figure(data=go.Scattergeo(
+        lon=f_airports["lon"],
+        lat=f_airports["lat"],
+        text=f_airports["name"],
+       
+        mode="markers",
+        marker_color=f_airports["selection"],
+        ))
+    fig.update_layout(
+        title="Selected Airports",
+        geo_scope="usa",
+        margin=dict(l=20, r=20, t=20, b=20),
+        )
     return fig
-
-
-def create_time_series(dff, axis_type, title):
-
-    fig = px.scatter(dff, x='Year', y='Value')
-
-    fig.update_traces(mode='lines+markers')
-
-    fig.update_xaxes(showgrid=False)
-
-    fig.update_yaxes(type='linear' if axis_type == 'Linear' else 'log')
-
-    fig.add_annotation(x=0, y=0.85, xanchor='left', yanchor='bottom',
-                       xref='paper', yref='paper', showarrow=False, align='left',
-                       text=title)
-
-    fig.update_layout(height=225, margin={'l': 20, 'b': 30, 'r': 10, 't': 10})
-
-    return fig
-
-
-@app.callback(
-    Output('x-time-series', 'figure'),
-    Input('crossfilter-indicator-scatter', 'hoverData'),
-    Input('crossfilter-xaxis-column', 'value'),
-    Input('crossfilter-xaxis-type', 'value'))
-def update_y_timeseries(hoverData, xaxis_column_name, axis_type):
-    country_name = hoverData['points'][0]['customdata']
-    dff = df[df['Country Name'] == country_name]
-    dff = dff[dff['Indicator Name'] == xaxis_column_name]
-    title = '<b>{}</b><br>{}'.format(country_name, xaxis_column_name)
-    return create_time_series(dff, axis_type, title)
-
-
-@app.callback(
-    Output('y-time-series', 'figure'),
-    Input('crossfilter-indicator-scatter', 'hoverData'),
-    Input('crossfilter-yaxis-column', 'value'),
-    Input('crossfilter-yaxis-type', 'value'))
-def update_x_timeseries(hoverData, yaxis_column_name, axis_type):
-    dff = df[df['Country Name'] == hoverData['points'][0]['customdata']]
-    dff = dff[dff['Indicator Name'] == yaxis_column_name]
-    return create_time_series(dff, axis_type, yaxis_column_name)
 
 
 
 if __name__ == '__main__':
     app.run_server(debug=True,host='127.0.0.1')
+
