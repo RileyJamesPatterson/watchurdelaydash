@@ -102,6 +102,7 @@ app.layout = html.Div([
 #--- link DOM elements to data and events
 #update arrival airport with departure airport connections
 
+#clear arrival menu when departure dropdown changes
 @app.callback(
         Output("arr_select","value"),
         Input("dep_select","value")
@@ -110,7 +111,7 @@ def clearArrivalAirport(_):
     return ""
 
 
-
+#populate arrival dropdown when departure dropdown selected
 @app.callback(
      Output("arr_select","options"),
      Input("dep_select","value"),   
@@ -125,7 +126,7 @@ def genConnections(departureA):
     # returns list of dics of connecting flights in the form {label:<name>,value:<iata>}
     return airports.loc[connections,["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
 
-
+#update airport map when deparure or arrival dropdowns populated
 @app.callback(
     Output('airportMap', 'figure'),
     Input('dep_select', 'value'),
@@ -135,17 +136,16 @@ def genConnections(departureA):
 def genAirportMap(departureA,arrivalA):
     f_airports=airports.copy()
     
-
-    #create column in data frame indicationg if airport is departure/connection/arrival
-
+    
     #creates a column with map color based on selection status
     f_airports["selection"]="black"
     f_airports.loc[departureA,"selection"]="red"
     connections=f_airports.loc[departureA,"allowed_destination"]
     f_airports.loc[connections,"selection"]="aqua"
     f_airports.loc[arrivalA,"selection"]="orange"
-
-   
+    if departureA != "Departure Airport":
+        show_only=[*connections,departureA]
+        f_airports=f_airports.loc[show_only]
     fig=go.Figure(data=go.Scattergeo(
         lon=f_airports["lon"],
         lat=f_airports["lat"],
@@ -155,7 +155,7 @@ def genAirportMap(departureA,arrivalA):
         marker_color=f_airports["selection"],
         ))
     fig.update_layout(
-        title="Selected Airports",
+        title=departureA,
         geo_scope="usa",
         margin=dict(l=20, r=20, t=20, b=20),
         )
