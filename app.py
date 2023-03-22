@@ -28,7 +28,7 @@ dep_input_element=html.Div([
         
    ],
     className="header_input",
-    style={'display': 'inline-block'})
+    )
 
 #arrival point input form element
 arr_input_elemnet=html.Div([
@@ -38,7 +38,6 @@ arr_input_elemnet=html.Div([
     
     ],
     className="header_input",
-    style={'display': 'inline-block'}
     )
 
 #departure date input form element
@@ -51,7 +50,7 @@ date_input_element=html.Div([
         initial_visible_month=date.today(),)    
     ],
     className="header_input",
-    style={'display': 'inline-block'})
+    )
 
 
 
@@ -67,18 +66,36 @@ app.layout = html.Div([
         ],
         id="app-header"
         ),
-    #Plots
+
+    
     html.Div([
         #left Panel
         dcc.Graph(
             id='airportMap',
+            style={'height': '100%'}
         )
-    ]),
+        ],
+        id="lpanel"),
+
     html.Div([
         #right panel
-        dcc.Graph(id='rpanel1'),
-        dcc.Graph(id='rpanel2'),
-    ]),
+        dcc.Graph(
+            style={'height': '100%'}
+            )
+        ],
+        id='rpanel1'),
+    html.Div([
+        dcc.Graph(
+            style={'height': '100%'}
+            )],
+        id='rpanel2'),
+    
+    html.Div([
+        #Weather Widget
+        "Place Holder Weather Widget text"
+        ],
+        id='weatherWidget'),
+
 
 ], id="container")
 
