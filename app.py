@@ -3,19 +3,25 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import utils
 from datetime import date
 
 external_stylesheets = ['watch.css']
 logo_path='assets/logo.png'
 app = Dash(__name__, external_stylesheets=external_stylesheets)
 
+#import airport and flight data 
 with open("assets/airports_of_concern.json") as file:
-    airports=pd.read_json(file).T
+    airports=pd.read_json(file).T #PLACEHOLDER NEED REAL DATA
+
+with open("assets/DTW_2021_flights.json") as file:
+    flights=pd.read_json(file) #PLACEHOLDER NEED REAL DATA
 
 iata_to_name=airports["name"].to_dict()
 drop_d_dic=airports[["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
 
-#---Define Components
+
+#region ---Define Components
 
 #departure point input form element
 dep_input_element=html.Div([
@@ -42,20 +48,20 @@ arr_input_elemnet=html.Div([
 
 #departure date input form element
 date_input_element=html.Div([
-    "Departure window:",html.Br(),
-    dcc.DatePickerRange(
+    "Departure Date:",html.Br(),
+    dcc.DatePickerSingle(
         id="date_input",
         min_date_allowed=date.today(), #set this to todays date
-        #max_date_allowed=pd.to_datetime(date.today())+pd.DateOffset(years=2),
-        initial_visible_month=date.today(),)    
+        max_date_allowed=pd.to_datetime(date.today())+pd.DateOffset(weeks=2),
+        date=date.today(),
+    )
+          
     ],
     className="header_input",
     )
+# endregion
 
-
-
-
-#--- add components to virtual DOM
+# region --- Add components to virtual DOM
 app.layout = html.Div([
     #header
     html.Div([
@@ -86,6 +92,7 @@ app.layout = html.Div([
         id='rpanel1'),
     html.Div([
         dcc.Graph(
+            id="violinPlot",
             style={'height': '100%'}
             )],
         id='rpanel2'),
@@ -98,10 +105,9 @@ app.layout = html.Div([
 
 
 ], id="container")
+# endregion
 
-#--- link DOM elements to data and events
-#update arrival airport with departure airport connections
-
+#region --- Define Events and States
 #clear arrival menu when departure dropdown changes
 @app.callback(
         Output("arr_select","value"),
@@ -111,7 +117,7 @@ def clearArrivalAirport(_):
     return ""
 
 
-#populate arrival dropdown when departure dropdown selected
+#populate arrival dropdown when departure dropdown selected with airport connections
 @app.callback(
      Output("arr_select","options"),
      Input("dep_select","value"),   
@@ -126,7 +132,7 @@ def genConnections(departureA):
     # returns list of dics of connecting flights in the form {label:<name>,value:<iata>}
     return airports.loc[connections,["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
 
-#update airport map when deparure or arrival dropdowns populated
+#update airport map when departure or arrival dropdowns populated
 @app.callback(
     Output('airportMap', 'figure'),
     Input('dep_select', 'value'),
@@ -143,6 +149,8 @@ def genAirportMap(departureA,arrivalA):
     connections=f_airports.loc[departureA,"allowed_destination"]
     f_airports.loc[connections,"selection"]="aqua"
     f_airports.loc[arrivalA,"selection"]="orange"
+
+    #Once user has selected a departure airport, non-connecting airports dropped from map
     if departureA != "Departure Airport":
         show_only=[*connections,departureA]
         f_airports=f_airports.loc[show_only]
@@ -155,13 +163,59 @@ def genAirportMap(departureA,arrivalA):
         marker_color=f_airports["selection"],
         ))
     fig.update_layout(
-        title=departureA,
+    #    title=departureA,
         geo_scope="usa",
         margin=dict(l=20, r=20, t=20, b=20),
         )
     return fig
 
+#Violin plot of historical data
+@app.callback(
+    Output('violinPlot', 'figure'),
+    Input('dep_select', 'value'),
+    Input("arr_select","value"),
+    Input("date_input", "date"),
+)
+def updateViolin(departureA,arrivalA,depDate):
+    f_flights=flights.copy()
+    if (departureA in f_flights.ORIGIN.values) and (arrivalA in f_flights.DEST.values):
+        # if inputs are populated
+        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
+        fig=px.violin(f_flights,y="ARR_DELAY",box=True,points="all")
+        return fig
 
+    else:
+        #failure case - inputs not populated
+        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
+        fig=px.violin(f_flights,y="ARR_DELAY",box=True,points="all")
+        return fig
+
+
+#Populate Weather Data when input changes
+@app.callback(
+    Output('weatherWidget', 'children'),
+    Input('dep_select', 'value'),
+    Input("arr_select","value"),
+    Input("date_input", "date"),
+)
+
+def updateWeather(departureA,arrivalA,depDate):
+    #if input fields are populated get weather
+    if (departureA in airports.index) and (arrivalA in airports.index):
+        depWeather=utils.getWeather(airports.loc[departureA].lon,airports.loc[departureA].lat,depDate)
+
+    #else return blank state
+    else:
+        depWeather="Please Input Departure point, Arrival Point and Date to generate weather"
+    return ([arg for arg in depWeather])
+
+
+
+
+
+
+
+# endregion
 
 if __name__ == '__main__':
     app.run_server(debug=True,host='127.0.0.1')
