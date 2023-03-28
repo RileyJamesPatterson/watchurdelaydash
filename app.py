@@ -86,13 +86,14 @@ app.layout = html.Div([
     html.Div([
         #right panel
         dcc.Graph(
+            id="violinPlot",
             style={'height': '100%'}
             )
         ],
         id='rpanel1'),
     html.Div([
         dcc.Graph(
-            id="violinPlot",
+            
             style={'height': '100%'}
             )],
         id='rpanel2'),
