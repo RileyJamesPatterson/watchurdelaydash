@@ -12,10 +12,10 @@ app = Dash(__name__, external_stylesheets=external_stylesheets)
 
 #import airport and flight data 
 with open("assets/airports_of_concern.json") as file:
-    airports=pd.read_json(file).T #PLACEHOLDER NEED REAL DATA
+    airports=pd.read_json(file).T #PLACEHOLDER NEED REAL DATA polars goes here
 
 with open("assets/DTW_2021_flights.json") as file:
-    flights=pd.read_json(file) #PLACEHOLDER NEED REAL DATA
+    flights=pd.read_json(file) #PLACEHOLDER NEED REAL DATA polars goes here
 
 iata_to_name=airports["name"].to_dict()
 drop_d_dic=airports[["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
@@ -54,9 +54,17 @@ date_input_element=html.Div([
         min_date_allowed=date.today(), #set this to todays date
         max_date_allowed=pd.to_datetime(date.today())+pd.DateOffset(weeks=2),
         date=date.today(),
-    )
+    ),
+    "Departure hour (0-23):",html.Br(),
+    dcc.Input(
+    id="hour_input",
+    type="number",
+    min=0,
+    max=23,
+    ),
           
     ],
+    id="departure_date",
     className="header_input",
     )
 # endregion
@@ -93,7 +101,7 @@ app.layout = html.Div([
         id='rpanel1'),
     html.Div([
         dcc.Graph(
-            
+            id="paraPlot",
             style={'height': '100%'}
             )],
         id='rpanel2'),
@@ -175,7 +183,7 @@ def genAirportMap(departureA,arrivalA):
     Output('violinPlot', 'figure'),
     Input('dep_select', 'value'),
     Input("arr_select","value"),
-    Input("date_input", "date"),
+    Input("date_input", "date"), #wire this up - DO WE WANT HOUR
 )
 def updateViolin(departureA,arrivalA,depDate):
     f_flights=flights.copy()
@@ -190,6 +198,27 @@ def updateViolin(departureA,arrivalA,depDate):
         f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
         fig=px.violin(f_flights,y="ARR_DELAY",box=True,points="all")
         return fig
+    
+#Parrallel catagories plot of historical data
+@app.callback(
+    Output('paraPlot', 'figure'),
+    Input('dep_select', 'value'),
+    Input("arr_select","value"),
+    Input("date_input", "date"), #wire this up - DO WE WANT HOUR
+)
+
+def updateParaPlot(departureA,arrivalA,depDate):
+    f_flights=flights.copy()
+    if (departureA in f_flights.ORIGIN.values) and (arrivalA in f_flights.DEST.values):
+        # if inputs are populated
+        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
+        return utils.getParacats(f_flights)
+
+    else:
+        #failure case - inputs not populated
+        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
+        
+        return utils.getParacats(f_flights)
 
 
 #Populate Weather Data when input changes

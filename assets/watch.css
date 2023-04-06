@@ -23,6 +23,11 @@
     background-color:rgb(233, 103, 103)
 }
 
+#departure_date{
+    display:grid;
+    grid-template-columns:  repeat(2, minmax(0, 1fr));
+    grid-template-rows:  repeat(2, minmax(0, 1fr));
+}
 
 .header_input{
     border: 2px solid red;
