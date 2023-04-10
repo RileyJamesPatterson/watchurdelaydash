@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import utils
-from datetime import date,datetime,time,timedelta
+from datetime import date,datetime,timedelta
 
 external_stylesheets = ['watch.css']
 logo_path='assets/logo.png'
@@ -289,8 +289,6 @@ def updateWeather(arrivalA,depDate,hourInput):
         return html.Td("Please Input Arrival Airport and Date to Generate Weather",colSpan=5)
 
     
-
-
 
 # endregion
 
