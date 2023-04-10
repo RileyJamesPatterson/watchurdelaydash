@@ -107,17 +107,19 @@ app.layout = html.Div([
             )],
         id='rpanel2'),
     
-    html.Div([
+    html.Table([
         #Weather Widget
-        html.Div([
-            html.Div([]),
-            html.Img(src="assets/smallTempIcon.png"),
-            html.Img(src="assets/smallSnowIcon.png"),
-            html.Img(src="assets/smallRainIcon.png"),
-            html.Img(src="assets/smallVisibilIcon.png"),
+        html.Tr([
+            html.Th("Airport"),
+            html.Th(html.Img(src="assets/smallTempIcon.png")),
+            html.Th(html.Img(src="assets/smallSnowIcon.png")),
+            html.Th(html.Img(src="assets/smallRainIcon.png")),
+            html.Th(html.Img(src="assets/smallVisibilIcon.png")),
             ],id="weatherIcons"),
-        html.Div(["1","2","3","4"],id="departureWeather"),
-        html.Div(["1","2","3","4"],id="arrivalWeather"),
+        html.Br(),
+        html.Tr([html.Td("1"),html.Td("1"),html.Td("1"),html.Td("1"),html.Td("1")],id="departureWeather"),
+        html.Br(),
+        html.Tr([html.Td("1"),html.Td("1"),html.Td("1"),html.Td("1"),html.Td("1")],id="arrivalWeather"),
         ],
         id='weatherWidget'),
 
@@ -229,8 +231,36 @@ def updateParaPlot(departureA,arrivalA,depDate):
         
         return utils.getParacats(f_flights)
 
+#Populate Departure Weather Data when input changes
+@app.callback(
+    Output('departureWeather', 'children'),
+    Input("dep_select","value"),
+    Input("date_input", "date"),
+    Input('hour_input', 'value'),
+)
+def updateWeather(depA,depDate,hourInput):
 
-#Populate Weather Data when input changes
+    #Create datetime field from date and hour inputs
+    datetime_obj=datetime.fromisoformat(str(depDate))
+    delta= timedelta(hours=hourInput)
+    flightDateTime=datetime_obj+delta
+    
+    #if input fields are populated get weather
+    if (depA in airports.index):
+        #CURRENTLY IF YOU MANUALLY INPUT DATE YOU GET A WARNING ABOUT ISO STRING
+        depWeather=utils.getWeather(airports.loc[depA].lon,airports.loc[depA].lat,flightDateTime)
+        #create a list of html elements to return 
+        divContents=[html.Td("Departure: "+depA)]
+        for arg in depWeather:
+            divContents.append(html.Td(arg))
+        return (divContents)
+    
+    #else return blank state
+    else:
+        return html.Td("Please Input Departure Airport and Date to Generate Weather",colSpan=5)
+
+
+#Populate Arrival Weather Data when input changes
 @app.callback(
     Output('arrivalWeather', 'children'),
     Input("arr_select","value"),
@@ -244,22 +274,19 @@ def updateWeather(arrivalA,depDate,hourInput):
     delta= timedelta(hours=hourInput)
     flightDateTime=datetime_obj+delta
     
- 
-    
-
     #if input fields are populated get weather
     if (arrivalA in airports.index):
         #CURRENTLY IF YOU MANUALLY INPUT DATE YOU GET A WARNING ABOUT ISO STRING
         depWeather=utils.getWeather(airports.loc[arrivalA].lon,airports.loc[arrivalA].lat,flightDateTime)
         #create a list of html elements to return 
-        divContents=["Arrival: "+arrivalA]
+        divContents=[html.Td("Arrival: "+arrivalA)]
         for arg in depWeather:
-            divContents.append(html.Div(arg))
+            divContents.append(html.Td(arg))
         return (divContents)
     
     #else return blank state
     else:
-        return "Please Input Arrival Airport and Date to Generate Weather"
+        return html.Td("Please Input Arrival Airport and Date to Generate Weather",colSpan=5)
 
     
 
