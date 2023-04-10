@@ -108,7 +108,15 @@ app.layout = html.Div([
     
     html.Div([
         #Weather Widget
-        "Place Holder Weather Widget text"
+        html.Div([
+            html.Div([]),
+            html.Img(src="assets/smallTempIcon.png"),
+            html.Img(src="assets/smallSnowIcon.png"),
+            html.Img(src="assets/smallRainIcon.png"),
+            html.Img(src="assets/smallVisibilIcon.png"),
+            ],id="weatherIcons"),
+        html.Div(["1","2","3","4"],id="departureWeather"),
+        html.Div(["1","2","3","4"],id="arrivalWeather"),
         ],
         id='weatherWidget'),
 
@@ -223,7 +231,7 @@ def updateParaPlot(departureA,arrivalA,depDate):
 
 #Populate Weather Data when input changes
 @app.callback(
-    Output('weatherWidget', 'children'),
+    Output('arrivalWeather', 'children'),
     Input('dep_select', 'value'),
     Input("arr_select","value"),
     Input("date_input", "date"),

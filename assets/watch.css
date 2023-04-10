@@ -66,7 +66,51 @@
     grid-row-start: 4;
     grid-row-end:5;
     border: 2px solid red;
-    background-color:rgb(103, 224, 233)
+    background-color:rgb(103, 224, 233);
+    display:grid;
+    grid-template-columns:  repeat(4, minmax(0, 1fr));
+    grid-template-rows: minmax(0,30px),minmax(0,30px),minmax(0,30px);
+    justify-content:space-evenly;
+    align-items: center;
+
+}
+
+#weatherIcons{
+    border: 2px solid green;
+    grid-column-start: 1;
+    grid-column-end: 5;
+    grid-row-start: 1;
+    grid-row-end:2;
+    display: flex;
+    flex-direction:row;
+    justify-content:space-evenly;
+    align-items: center;
+}
+
+#departureWeather{
+    border: 2px solid green;
+    grid-column-start: 1;
+    grid-column-end: 5;
+    grid-row-start: 2;
+    grid-row-end:3;
+    display: flex;
+    flex-direction:row;
+    justify-content:space-evenly;
+    align-items: center;
+
+}
+
+#arrivalWeather{
+    border: 2px solid blueviolet;
+    grid-column-start: 1;
+    grid-column-end: 5;
+    grid-row-start: 3;
+    grid-row-end:4;
+    display: flex;
+    flex-direction:row;
+    justify-content:space-evenly;
+    align-items: center;
+
 }
 
 body{
