@@ -5,8 +5,14 @@ import plotly.graph_objects as go
 
 
 def getWeather(lon,lat,date):
+    #Takes longitude of airport, latitude of airporte and datetime of departure,
+    #returns list of [precipitation ,snow,temperature and visbility] formated as strings
+
     #placeholder for api call
-    return (lon,lat, date)
+
+
+
+    return (["‑40 °F",".5''/hour","0''", "Cloudy"])
 
 def getParacats(flights):
     '''Takes a dataframe of flights and returns a a plotly parrallel catagory figure
@@ -35,7 +41,7 @@ def getParacats(flights):
 
     #create parcats trace
     color=flights["BUCKETED_DELAY"]
-    colorscale=["seagreen","khaki","orange","red","darkred"]
+    colorscale=["seagreen","khaki","orange","lightsalmon","darkred"]
     fig=go.Figure(
         data=[
             go.Parcats(

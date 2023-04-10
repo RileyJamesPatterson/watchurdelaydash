@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import utils
-from datetime import date
+from datetime import date,datetime,time,timedelta
 
 external_stylesheets = ['watch.css']
 logo_path='assets/logo.png'
@@ -61,6 +61,7 @@ date_input_element=html.Div([
     type="number",
     min=0,
     max=23,
+    value=13,
     ),
           
     ],
@@ -232,24 +233,35 @@ def updateParaPlot(departureA,arrivalA,depDate):
 #Populate Weather Data when input changes
 @app.callback(
     Output('arrivalWeather', 'children'),
-    Input('dep_select', 'value'),
     Input("arr_select","value"),
     Input("date_input", "date"),
+    Input('hour_input', 'value'),
 )
+def updateWeather(arrivalA,depDate,hourInput):
 
-def updateWeather(departureA,arrivalA,depDate):
+    #Create datetime field from date and hour inputs
+    datetime_obj=datetime.fromisoformat(str(depDate))
+    delta= timedelta(hours=hourInput)
+    flightDateTime=datetime_obj+delta
+    
+ 
+    
+
     #if input fields are populated get weather
-    if (departureA in airports.index) and (arrivalA in airports.index):
-        depWeather=utils.getWeather(airports.loc[departureA].lon,airports.loc[departureA].lat,depDate)
-
+    if (arrivalA in airports.index):
+        #CURRENTLY IF YOU MANUALLY INPUT DATE YOU GET A WARNING ABOUT ISO STRING
+        depWeather=utils.getWeather(airports.loc[arrivalA].lon,airports.loc[arrivalA].lat,flightDateTime)
+        #create a list of html elements to return 
+        divContents=["Arrival: "+arrivalA]
+        for arg in depWeather:
+            divContents.append(html.Div(arg))
+        return (divContents)
+    
     #else return blank state
     else:
-        depWeather="Please Input Departure point, Arrival Point and Date to generate weather"
-    return ([arg for arg in depWeather])
+        return "Please Input Arrival Airport and Date to Generate Weather"
 
-
-
-
+    
 
 
 
