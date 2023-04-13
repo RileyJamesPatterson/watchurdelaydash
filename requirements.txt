@@ -1,0 +1,8 @@
+pandas
+dash
+plotly
+numpy
+meteostat
+scipy
+statsmodels
+
