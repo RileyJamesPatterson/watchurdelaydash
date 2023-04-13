@@ -1,4 +1,5 @@
 from dash import Dash, html, dcc, Input, Output
+import json
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -9,16 +10,46 @@ from datetime import date,datetime,timedelta
 external_stylesheets = ['watch.css']
 logo_path='assets/logo.png'
 app = Dash(__name__, external_stylesheets=external_stylesheets)
-
+weather_table = {
+    1: "Clear",
+    2: "Fair",
+    3: "Cloudy",
+    4: "Overcast",
+    5: "Fog",
+    6: "Freezing Fog",
+    7: "Light Rain",
+    8: "Rain",
+    9: "Heavy Rain",
+    10: "Freezing Rain",
+    11: "Heavy Freezing Rain",
+    12: "Sleet",
+    13: "Heavy Sleet",
+    14: "Light Snow",
+    15: "Snow",
+    16: "Heavy Snow",
+    17: "Rain Shower",
+    18: "Heavy Rain Shower",
+    19: "Sleet Shower",
+    20: "Heavy Sleet Shower",
+    21: "Snow Shower",
+    22: "Heavy Snow Shower",
+    23: "Lightning",
+    24: "Hail",
+    25: "Thunderstorm",
+    26: "Heavy Thunderstorm",
+    27: "Storm"
+}
 #import airport and flight data 
-with open("assets/airports_of_concern.json") as file:
-    airports=pd.read_json(file).T #PLACEHOLDER NEED REAL DATA polars goes here
+with open("assets/origin_airports.json") as file:
+    departures=json.load(file) 
 
-with open("assets/DTW_2021_flights.json") as file:
-    flights=pd.read_json(file) #PLACEHOLDER NEED REAL DATA polars goes here
+with open("assets/destination_airports.json") as file:
+    arrival=json.load(file) 
 
-iata_to_name=airports["name"].to_dict()
-drop_d_dic=airports[["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
+airports = departures.copy()
+airports.update(arrival)
+
+# drop_d_dic=airports[["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
 
 
 #region ---Define Components
@@ -27,7 +58,7 @@ drop_d_dic=airports[["name","iata"]].rename(columns={"name":"label","iata":"valu
 dep_input_element=html.Div([
     "Departure Point:",
     dcc.Dropdown(
-        drop_d_dic,
+        list(departures.keys()),
         'Departure Airport',
         id='dep_select',
         ),
@@ -40,7 +71,8 @@ dep_input_element=html.Div([
 arr_input_elemnet=html.Div([
     "Arrival:",
     dcc.Dropdown(
-        id='arr_select' ),
+        id='arr_select',
+        ),
     
     ],
     className="header_input",
@@ -144,13 +176,10 @@ def clearArrivalAirport(_):
 )
 def genConnections(departureA):
     #updates arrival airport dropdown label/value options
-    selected_row=airports[airports["iata"]==departureA]
-    #return blank if departure airport not in data - prevents start up warning
-    if departureA not in airports.index:
-        return {}
-    connections=selected_row.allowed_destination[0]
+    dest_iata = departureA
+
     # returns list of dics of connecting flights in the form {label:<name>,value:<iata>}
-    return airports.loc[connections,["name","iata"]].rename(columns={"name":"label","iata":"value"}).to_dict('records')
+    return departures[dest_iata]["allowed_destination"]
 
 #update airport map when departure or arrival dropdowns populated
 @app.callback(
@@ -160,8 +189,7 @@ def genConnections(departureA):
 )
 #Airport Marker Map
 def genAirportMap(departureA,arrivalA):
-    f_airports=airports.copy()
-    
+    f_airports=pd.DataFrame.from_dict(airports,orient="index")
     
     #creates a column with map color based on selection status
     f_airports["selection"]="black"
@@ -189,7 +217,7 @@ def genAirportMap(departureA,arrivalA):
         )
     return fig
 
-#Violin plot of historical data
+# Violin plot of historical data
 @app.callback(
     Output('violinPlot', 'figure'),
     Input('dep_select', 'value'),
@@ -197,18 +225,12 @@ def genAirportMap(departureA,arrivalA):
     Input("date_input", "date"), #wire this up - DO WE WANT HOUR
 )
 def updateViolin(departureA,arrivalA,depDate):
-    f_flights=flights.copy()
-    if (departureA in f_flights.ORIGIN.values) and (arrivalA in f_flights.DEST.values):
-        # if inputs are populated
-        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
-        fig=px.violin(f_flights,y="ARR_DELAY",box=True,points="all")
-        return fig
-
-    else:
-        #failure case - inputs not populated
-        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
-        fig=px.violin(f_flights,y="ARR_DELAY",box=True,points="all")
-        return fig
+    dep_iata = departureA
+    arr_iata = arrivalA
+    flights = utils.get_all_flights_for_airport(dep_iata, arr_iata)
+    flights = pd.concat(flights)
+ 
+    return px.violin(flights,y="ARR_DELAY",box=True,points="all")
     
 #Parrallel catagories plot of historical data
 @app.callback(
@@ -219,19 +241,14 @@ def updateViolin(departureA,arrivalA,depDate):
 )
 
 def updateParaPlot(departureA,arrivalA,depDate):
-    f_flights=flights.copy()
-    if (departureA in f_flights.ORIGIN.values) and (arrivalA in f_flights.DEST.values):
-        # if inputs are populated
-        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
-        return utils.getParacats(f_flights)
+    dep_iata = departureA
+    flights=pd.read_json(f"assets/data/{dep_iata}_2019_flights.json")
 
-    else:
-        #failure case - inputs not populated
-        f_flights=f_flights.loc[(flights.ORIGIN==departureA) & (flights.DEST==arrivalA)]
+    flights=flights[flights.DEST==arrivalA]
         
-        return utils.getParacats(f_flights)
+    return utils.getParacats(flights)
 
-#Populate Departure Weather Data when input changes
+# Populate Departure Weather Data when input changes
 @app.callback(
     Output('departureWeather', 'children'),
     Input("dep_select","value"),
@@ -240,24 +257,39 @@ def updateParaPlot(departureA,arrivalA,depDate):
 )
 def updateWeather(depA,depDate,hourInput):
 
+    dep_iata = depA
+
     #Create datetime field from date and hour inputs
     datetime_obj=datetime.fromisoformat(str(depDate))
+    
     delta= timedelta(hours=hourInput)
     flightDateTime=datetime_obj+delta
     
     #if input fields are populated get weather
-    if (depA in airports.index):
-        #CURRENTLY IF YOU MANUALLY INPUT DATE YOU GET A WARNING ABOUT ISO STRING
-        depWeather=utils.getWeather(airports.loc[depA].lon,airports.loc[depA].lat,flightDateTime)
-        #create a list of html elements to return 
-        divContents=[html.Td("Departure: "+depA)]
-        for arg in depWeather:
-            divContents.append(html.Td(arg))
-        return (divContents)
+
+    weather=utils.getWeather(departures[dep_iata]["lon"],departures[dep_iata]["lat"],flightDateTime)
     
-    #else return blank state
+    if np.isnan(weather["temp"]):
+        weather["temp"]="Not Available"
     else:
-        return html.Td("Please Input Departure Airport and Date to Generate Weather",colSpan=5)
+        weather["temp"]=str(round(weather["temp"], 2))
+    if np.isnan(weather["snow"]):
+        weather["snow"]="Not Available"
+    else:
+        weather["snow"]=str(round(weather["snow"], 2))
+    if np.isnan(weather["rain"]):
+        weather["rain"]="Not Available"
+    else:
+        weather["rain"]=str(round(weather["rain"], 2))
+    depWeather = [str(weather["temp"])+" C",weather["snow"],weather["rain"],weather_table[weather["code"]]]
+   
+    #create a list of html elements to return 
+    divContents=[html.Td("Departure: "+dep_iata)]
+    for i, arg in enumerate(depWeather):
+        divContents.append(html.Td(arg))
+
+    return divContents
+    
 
 
 #Populate Arrival Weather Data when input changes
@@ -269,24 +301,37 @@ def updateWeather(depA,depDate,hourInput):
 )
 def updateWeather(arrivalA,depDate,hourInput):
 
+    arr_iata = arrivalA
+
     #Create datetime field from date and hour inputs
     datetime_obj=datetime.fromisoformat(str(depDate))
+    
     delta= timedelta(hours=hourInput)
     flightDateTime=datetime_obj+delta
     
     #if input fields are populated get weather
-    if (arrivalA in airports.index):
-        #CURRENTLY IF YOU MANUALLY INPUT DATE YOU GET A WARNING ABOUT ISO STRING
-        depWeather=utils.getWeather(airports.loc[arrivalA].lon,airports.loc[arrivalA].lat,flightDateTime)
-        #create a list of html elements to return 
-        divContents=[html.Td("Arrival: "+arrivalA)]
-        for arg in depWeather:
-            divContents.append(html.Td(arg))
-        return (divContents)
-    
-    #else return blank state
+
+    weather=utils.getWeather(departures[arr_iata]["lon"],departures[arr_iata]["lat"],flightDateTime)
+
+    if np.isnan(weather["temp"]):
+        weather["temp"]="Not Available"
     else:
-        return html.Td("Please Input Arrival Airport and Date to Generate Weather",colSpan=5)
+        weather["temp"]=str(round(weather["temp"], 2))
+    if np.isnan(weather["snow"]):
+        weather["snow"]="Not Available"
+    else:
+        weather["snow"]=str(round(weather["snow"], 2))
+    if np.isnan(weather["rain"]):
+        weather["rain"]="Not Available"
+    else:
+        weather["rain"]=str(round(weather["rain"], 2))
+    arrWeather = [weather["temp"]+" C",weather["snow"],weather["rain"],weather_table[weather["code"]]]
+    #Create datetime field from date and hour inputs
+
+    divContents=[html.Td("Arrival: "+arr_iata)]
+    for arg in arrWeather:
+        divContents.append(html.Td(arg))
+    return (divContents)
 
     
 
