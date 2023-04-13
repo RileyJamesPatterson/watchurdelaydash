@@ -1,18 +1,30 @@
-
+import glob
+import os
 import pandas as pd
-
+import meteostat as ms
+import numpy as np
 import plotly.graph_objects as go
+from datetime import timedelta
+
 
 
 def getWeather(lon,lat,date):
     #Takes longitude of airport, latitude of airporte and datetime of departure,
-    #returns list of [precipitation ,snow,temperature and visbility] formated as strings
+    #returns list of [precipitation ,snow,temperature and visbility formated as strings
 
     #placeholder for api call
+    start = date - timedelta(hours=1)
+    end = date + timedelta(hours=1)
+    point = ms.Point(lat, lon)
+    weather = ms.Hourly(point, start, end).fetch()
+    temp = np.nanmean(weather.temp)
+    wind = np.nanmean(weather.wspd)
+    humidity = np.nanmean(weather.rhum)
+    precip = np.nanmean(weather.prcp)
+    snow = np.nanmean(weather.snow)
+    code = int(np.nanmax(weather.coco))
 
-
-
-    return (["‑40 °F",".5''/hour","0''", "Cloudy"])
+    return {"temp":temp,"wind": wind,"rhum": humidity,"rain": precip,"snow": snow, "code":code}
 
 def getParacats(flights):
     '''Takes a dataframe of flights and returns a a plotly parrallel catagory figure
@@ -22,7 +34,7 @@ def getParacats(flights):
         flights["ARR_DELAY"].fillna(9999), #replace nan with dummy var
         bins=[-100,0,15,30,9998,9999], #bins correspend to [ontime,0-15,15-30,30+,cancelled]
         labels=[0,1,2,3,4]   #CAN WE PREPROCESS THIS
-    )   
+    )
 
 
     #Create dimensions for plot
@@ -56,3 +68,12 @@ def getParacats(flights):
         ]
     )
     return fig
+
+def get_all_flights_for_airport(dep_airport_iata, arr_airport_iata):
+    for file in glob.glob(f"assets/data/{dep_airport_iata}_*_flights.json"):
+        df = pd.read_json(file)
+        df = df[df["DEST"] == arr_airport_iata]
+        yield df
+
+        
+
