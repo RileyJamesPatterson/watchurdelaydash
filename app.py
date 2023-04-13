@@ -44,7 +44,7 @@ with open("assets/origin_airports.json") as file:
     departures=json.load(file) 
 
 with open("assets/destination_airports.json") as file:
-    arrival=json.load(file) 
+    arrival=json.load(file)
 
 airports = departures.copy()
 airports.update(arrival)
@@ -59,7 +59,7 @@ dep_input_element=html.Div([
     "Departure Point:",
     dcc.Dropdown(
         list(departures.keys()),
-        'Departure Airport',
+        'ATL',
         id='dep_select',
         ),
         
@@ -71,6 +71,8 @@ dep_input_element=html.Div([
 arr_input_elemnet=html.Div([
     "Arrival:",
     dcc.Dropdown(
+        departures["ATL"]["allowed_destination"],
+        'ORD',
         id='arr_select',
         ),
     
@@ -161,12 +163,12 @@ app.layout = html.Div([
 
 #region --- Define Events and States
 #clear arrival menu when departure dropdown changes
-@app.callback(
-        Output("arr_select","value"),
-        Input("dep_select","value")
-)
-def clearArrivalAirport(_):
-    return ""
+# @app.callback(
+#         Output("arr_select","value"),
+#         Input("dep_select","value")
+# )
+# def clearArrivalAirport(_):
+#     return ""
 
 
 #populate arrival dropdown when departure dropdown selected with airport connections
@@ -177,7 +179,7 @@ def clearArrivalAirport(_):
 def genConnections(departureA):
     #updates arrival airport dropdown label/value options
     dest_iata = departureA
-
+    list(departures["ATL"]["allowed_destination"])
     # returns list of dics of connecting flights in the form {label:<name>,value:<iata>}
     return departures[dest_iata]["allowed_destination"]
 
@@ -298,6 +300,7 @@ def updateWeather(depA,depDate,hourInput):
     Input("arr_select","value"),
     Input("date_input", "date"),
     Input('hour_input', 'value'),
+    Input("dep_select","value"),
 )
 def updateWeather(arrivalA,depDate,hourInput):
 

@@ -34,7 +34,7 @@ def getParacats(flights):
         flights["ARR_DELAY"].fillna(9999), #replace nan with dummy var
         bins=[-100,0,15,30,9998,9999], #bins correspend to [ontime,0-15,15-30,30+,cancelled]
         labels=[0,1,2,3,4]   #CAN WE PREPROCESS THIS
-    )   
+    )
 
 
     #Create dimensions for plot
