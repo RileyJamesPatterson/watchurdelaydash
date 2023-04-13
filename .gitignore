@@ -2,4 +2,5 @@ demo.py
 __pycache__/
 
 data/
+model/
 

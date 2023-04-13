@@ -75,5 +75,3 @@ def get_all_flights_for_airport(dep_airport_iata, arr_airport_iata):
         df = df[df["DEST"] == arr_airport_iata]
         yield df
 
-        
-

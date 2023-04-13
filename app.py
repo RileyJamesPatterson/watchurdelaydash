@@ -6,10 +6,13 @@ import plotly.graph_objects as go
 import numpy as np
 import utils
 from datetime import date,datetime,timedelta
+from inference_utils import get_prediction
+from statsmodels.iolib.smpickle import load_pickle
 
 external_stylesheets = ['watch.css']
 logo_path='assets/logo.png'
 app = Dash(__name__, external_stylesheets=external_stylesheets)
+
 weather_table = {
     1: "Clear",
     2: "Fair",
@@ -39,12 +42,19 @@ weather_table = {
     26: "Heavy Thunderstorm",
     27: "Storm"
 }
+
+weather_inverse_table = {v: k for k, v in weather_table.items()}
+
 #import airport and flight data 
-with open("assets/origin_airports.json") as file:
+with open("assets/data/origin_airports.json") as file:
     departures=json.load(file) 
 
-with open("assets/destination_airports.json") as file:
+with open("assets/data/destination_airports.json") as file:
     arrival=json.load(file)
+
+# load model
+model = load_pickle('assets/model/model.pkl')
+date_features = pd.read_pickle('assets/model/date_features.pkl')
 
 airports = departures.copy()
 airports.update(arrival)
@@ -86,7 +96,7 @@ date_input_element=html.Div([
     dcc.DatePickerSingle(
         id="date_input",
         min_date_allowed=date.today(), #set this to todays date
-        max_date_allowed=pd.to_datetime(date.today())+pd.DateOffset(weeks=2),
+        max_date_allowed=pd.to_datetime(date.today())+pd.DateOffset(weeks=1),
         date=date.today(),
     ),
     "Departure hour (0-23):",html.Br(),
@@ -127,6 +137,15 @@ app.layout = html.Div([
         id="lpanel"),
 
     html.Div([
+        #left panel 2
+        dcc.Graph(
+            id="modelDelay",
+            style={'height': '100%'}
+            )
+        ],
+        id='lpanel2'),
+
+    html.Div([
         #right panel
         dcc.Graph(
             id="violinPlot",
@@ -134,6 +153,7 @@ app.layout = html.Div([
             )
         ],
         id='rpanel1'),
+
     html.Div([
         dcc.Graph(
             id="paraPlot",
@@ -178,10 +198,11 @@ app.layout = html.Div([
 )
 def genConnections(departureA):
     #updates arrival airport dropdown label/value options
-    dest_iata = departureA
-    list(departures["ATL"]["allowed_destination"])
+    dep_iata = departureA
+    if dep_iata == "" or dep_iata == None:
+        return []
     # returns list of dics of connecting flights in the form {label:<name>,value:<iata>}
-    return departures[dest_iata]["allowed_destination"]
+    return departures[dep_iata]["allowed_destination"]
 
 #update airport map when departure or arrival dropdowns populated
 @app.callback(
@@ -191,7 +212,26 @@ def genConnections(departureA):
 )
 #Airport Marker Map
 def genAirportMap(departureA,arrivalA):
+    dep_iata = departureA
+    arr_iata = arrivalA
     f_airports=pd.DataFrame.from_dict(airports,orient="index")
+
+    if dep_iata == None or dep_iata == "":
+
+        print("No airports selected")
+        fig=go.Figure(data=go.Scattergeo(
+        lon=f_airports["lon"],
+        lat=f_airports["lat"],
+        text=f_airports["name"],
+        mode="markers",
+        ))
+        fig.update_layout(
+    #    title=departureA,
+        geo_scope="usa",
+        margin=dict(l=20, r=20, t=20, b=20),
+        )
+        return fig
+    
     
     #creates a column with map color based on selection status
     f_airports["selection"]="black"
@@ -227,8 +267,14 @@ def genAirportMap(departureA,arrivalA):
     Input("date_input", "date"), #wire this up - DO WE WANT HOUR
 )
 def updateViolin(departureA,arrivalA,depDate):
+    
     dep_iata = departureA
     arr_iata = arrivalA
+    fig = go.Figure()
+
+    if arr_iata == None or dep_iata == None or dep_iata == "" or arr_iata == "":
+        return fig
+    
     flights = utils.get_all_flights_for_airport(dep_iata, arr_iata)
     flights = pd.concat(flights)
  
@@ -241,9 +287,11 @@ def updateViolin(departureA,arrivalA,depDate):
     Input("arr_select","value"),
     Input("date_input", "date"), #wire this up - DO WE WANT HOUR
 )
-
 def updateParaPlot(departureA,arrivalA,depDate):
     dep_iata = departureA
+    if dep_iata == None or dep_iata == "":
+        return go.Figure()
+    
     flights=pd.read_json(f"assets/data/{dep_iata}_2019_flights.json")
 
     flights=flights[flights.DEST==arrivalA]
@@ -257,10 +305,11 @@ def updateParaPlot(departureA,arrivalA,depDate):
     Input("date_input", "date"),
     Input('hour_input', 'value'),
 )
-def updateWeather(depA,depDate,hourInput):
+def updateWeather_dep(depA,depDate,hourInput):
 
     dep_iata = depA
-
+    if dep_iata == None:
+        return ["","","","",""]
     #Create datetime field from date and hour inputs
     datetime_obj=datetime.fromisoformat(str(depDate))
     
@@ -302,10 +351,11 @@ def updateWeather(depA,depDate,hourInput):
     Input('hour_input', 'value'),
     Input("dep_select","value"),
 )
-def updateWeather(arrivalA,depDate,hourInput):
+def updateWeather_arr(arrivalA,depDate,hourInput, _depA):
 
     arr_iata = arrivalA
-
+    if arr_iata == None:
+        return ["","","","",""]
     #Create datetime field from date and hour inputs
     datetime_obj=datetime.fromisoformat(str(depDate))
     
@@ -328,16 +378,79 @@ def updateWeather(arrivalA,depDate,hourInput):
         weather["rain"]="Not Available"
     else:
         weather["rain"]=str(round(weather["rain"], 2))
+    
     arrWeather = [weather["temp"]+" C",weather["snow"],weather["rain"],weather_table[weather["code"]]]
     #Create datetime field from date and hour inputs
 
     divContents=[html.Td("Arrival: "+arr_iata)]
     for arg in arrWeather:
         divContents.append(html.Td(arg))
-    return (divContents)
+    return divContents
 
+@app.callback(Output('modelDelay', 'figure'),
+              Input('dep_select', 'value'),
+              Input("arr_select","value"),
+              Input("date_input", "date"),
+              Input('hour_input', 'value'),
+              Input('departureWeather', 'children'),
+              Input('arrivalWeather', 'children'),
+              )
+def predictions(depA,arrA,depDate,hourInput,depWeather,arrWeather):
+    fig = go.Figure()
+    dep_iata = depA
+    arr_iata = arrA
+    if dep_iata == None or arr_iata == None or dep_iata == "" or arr_iata == "":
+        return go.Figure()
+    # get list of values in childrend from departureWeather
+    depWeather = [child["props"]["children"] for child in depWeather][1:]
+    arrWeather = [child["props"]["children"] for child in arrWeather][1:]
+
+    origin_temp = float(depWeather[0].split(" ")[0])
+    # origin_snow = depWeather[1]
+    origin_rain = depWeather[2]
+    if origin_rain == "Not Available":
+        origin_rain = 0
+    else:
+        origin_rain = float(origin_rain)
     
+    origin_weather_code  = weather_inverse_table[depWeather[3]]
+    if origin_weather_code == "Not Available":
+        origin_weather_code = 0
+    else:
+        origin_weather_code = int(origin_weather_code)
 
+    dest_temp = float(arrWeather[0].split(" ")[0])
+    # dest_snow = arrWeather[1]
+    dest_rain = arrWeather[2]
+    if dest_rain == "Not Available":
+        dest_rain = 0
+    else:
+        dest_rain = float(dest_rain)
+    dest_weather_code  = weather_inverse_table[arrWeather[3]]
+    if dest_weather_code == "Not Available":
+        dest_weather_code = 0
+    else:
+        dest_weather_code = int(dest_weather_code)
+
+    inputs1 = {
+    'date': datetime.date(datetime.fromisoformat(str(depDate))),
+    'dep_hour': hourInput,
+    'origin': dep_iata,
+    'dest': arr_iata,
+    'origin_code': origin_weather_code,
+    'dest_code': dest_weather_code,
+    'origin_temperature': origin_temp,
+    'dest_temperature': dest_temp,
+    'origin_total_precipitation': origin_rain,
+    'dest_total_precipitation': dest_rain,
+}
+    
+    mean, pmf = get_prediction(model, date_features, 60, inputs1)
+    
+    fig.add_trace(go.Scatter(x=np.arange(0, pmf.shape[0]), y=pmf, name="PMF"))
+    fig.add_vline(x=mean, line_width=3, line_dash="dash", line_color="red", name="Mean")
+    
+    return fig
 # endregion
 
 if __name__ == '__main__':
