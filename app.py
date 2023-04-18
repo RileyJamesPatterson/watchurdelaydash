@@ -66,7 +66,7 @@ airports.update(arrival)
 
 #departure point input form element
 dep_input_element=html.Div([
-    "Departure Point:",
+    "Departure Airport:",
     dcc.Dropdown(
         list(departures.keys()),
         'ATL',
@@ -79,7 +79,7 @@ dep_input_element=html.Div([
 
 #arrival point input form element
 arr_input_elemnet=html.Div([
-    "Arrival:",
+    "Arrival Airport:",
     dcc.Dropdown(
         departures["ATL"]["allowed_destination"],
         'ORD',
@@ -234,29 +234,41 @@ def genAirportMap(departureA,arrivalA):
     
     
     #creates a column with map color based on selection status
-    f_airports["selection"]="black"
-    f_airports.loc[departureA,"selection"]="red"
+    f_airports["selection"]="#636363"
+    f_airports.loc[departureA,"selection"]="#de2d26"
     connections=f_airports.loc[departureA,"allowed_destination"]
-    f_airports.loc[connections,"selection"]="aqua"
-    f_airports.loc[arrivalA,"selection"]="orange"
+    f_airports.loc[connections,"selection"]="#2c7fb8"
+    f_airports.loc[arrivalA,"selection"]="#fdae6b"
 
     #Once user has selected a departure airport, non-connecting airports dropped from map
     if departureA != "Departure Airport":
         show_only=[*connections,departureA]
         f_airports=f_airports.loc[show_only]
-    fig=go.Figure(data=go.Scattergeo(
+    fig=go.Figure(data=[go.Scattergeo(
         lon=f_airports["lon"],
         lat=f_airports["lat"],
         text=f_airports["name"],
-       
         mode="markers",
         marker_color=f_airports["selection"],
-        ))
+        showlegend=False,name=""),
+        go.Scatter(x=[None], y=[None], mode='markers',
+                   marker=dict(size=8, color='#de2d26'),
+                   showlegend=True, name='Departure Airport'),
+        go.Scatter(x=[None], y=[None], mode='markers',
+                   marker=dict(size=8, color='#fdae6b'),
+                   showlegend=True, name='Arrival Airport'),
+        go.Scatter(x=[None], y=[None], mode='markers',
+                   marker=dict(size=8, color='#2c7fb8'),
+                   showlegend=True, name='Other Potential Arrival Airports')],
+                      )
     fig.update_layout(
-    #    title=departureA,
+        title_text='Airport Map', title_x=0.5,
         geo_scope="usa",
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(l=20, r=20, t=30, b=30),
         )
+    
+    fig.update_yaxes(minor_showgrid=False,visible=False, zeroline=False)
+    fig.update_xaxes(minor_showgrid=False,visible=False, zeroline=False)
     return fig
 
 # Violin plot of historical data
@@ -278,7 +290,7 @@ def updateViolin(departureA,arrivalA,depDate):
     flights = utils.get_all_flights_for_airport(dep_iata, arr_iata)
     flights = pd.concat(flights)
  
-    return px.violin(flights,y="ARR_DELAY",box=True,points="all")
+    return px.violin(flights,y="ARR_DELAY_NEW",box=True,points="all")
     
 #Parrallel catagories plot of historical data
 @app.callback(
@@ -292,8 +304,11 @@ def updateParaPlot(departureA,arrivalA,depDate):
     if dep_iata == None or dep_iata == "":
         return go.Figure()
     
-    flights=pd.read_json(f"assets/data/{dep_iata}_2019_flights.json")
-
+    flights2019=pd.read_json(f"assets/data/{dep_iata}_2019_flights.json")
+    flights2020=pd.read_json(f"assets/data/{dep_iata}_2020_flights.json")
+    flights2021=pd.read_json(f"assets/data/{dep_iata}_2021_flights.json")
+    flights = pd.concat([flights2019,flights2020,flights2021])
+    #flights = utils.get_all_flights_for_airport(departureA, arrivalA)
     flights=flights[flights.DEST==arrivalA]
         
     return utils.getParacats(flights)
@@ -325,14 +340,14 @@ def updateWeather_dep(depA,depDate,hourInput):
     else:
         weather["temp"]=str(round(weather["temp"], 2))
     if np.isnan(weather["snow"]):
-        weather["snow"]="Not Available"
+        weather["snow"]="0"
     else:
         weather["snow"]=str(round(weather["snow"], 2))
     if np.isnan(weather["rain"]):
-        weather["rain"]="Not Available"
+        weather["rain"]="0"
     else:
         weather["rain"]=str(round(weather["rain"], 2))
-    depWeather = [str(weather["temp"])+" C",weather["snow"],weather["rain"],weather_table[weather["code"]]]
+    depWeather = [str(weather["temp"])+" C",weather["snow"]+" mm",weather["rain"]+" mm",weather_table[weather["code"]]]
    
     #create a list of html elements to return 
     divContents=[html.Td("Departure: "+dep_iata)]
@@ -371,15 +386,15 @@ def updateWeather_arr(arrivalA,depDate,hourInput, _depA):
     else:
         weather["temp"]=str(round(weather["temp"], 2))
     if np.isnan(weather["snow"]):
-        weather["snow"]="Not Available"
+        weather["snow"]="0"
     else:
         weather["snow"]=str(round(weather["snow"], 2))
     if np.isnan(weather["rain"]):
-        weather["rain"]="Not Available"
+        weather["rain"]="0"
     else:
         weather["rain"]=str(round(weather["rain"], 2))
     
-    arrWeather = [weather["temp"]+" C",weather["snow"],weather["rain"],weather_table[weather["code"]]]
+    arrWeather = [weather["temp"]+" C",weather["snow"]+" mm",weather["rain"]+" mm",weather_table[weather["code"]]]
     #Create datetime field from date and hour inputs
 
     divContents=[html.Td("Arrival: "+arr_iata)]
@@ -407,27 +422,27 @@ def predictions(depA,arrA,depDate,hourInput,depWeather,arrWeather):
 
     origin_temp = float(depWeather[0].split(" ")[0])
     # origin_snow = depWeather[1]
-    origin_rain = depWeather[2]
-    if origin_rain == "Not Available":
+    origin_rain = depWeather[2].split(" ")[0]
+    if origin_rain == "0":
         origin_rain = 0
     else:
         origin_rain = float(origin_rain)
     
     origin_weather_code  = weather_inverse_table[depWeather[3]]
-    if origin_weather_code == "Not Available":
+    if origin_weather_code == "0":
         origin_weather_code = 0
     else:
         origin_weather_code = int(origin_weather_code)
 
     dest_temp = float(arrWeather[0].split(" ")[0])
     # dest_snow = arrWeather[1]
-    dest_rain = arrWeather[2]
-    if dest_rain == "Not Available":
+    dest_rain = arrWeather[2].split(" ")[0]
+    if dest_rain == "0":
         dest_rain = 0
     else:
         dest_rain = float(dest_rain)
     dest_weather_code  = weather_inverse_table[arrWeather[3]]
-    if dest_weather_code == "Not Available":
+    if dest_weather_code == "0":
         dest_weather_code = 0
     else:
         dest_weather_code = int(dest_weather_code)
@@ -449,6 +464,9 @@ def predictions(depA,arrA,depDate,hourInput,depWeather,arrWeather):
     
     fig.add_trace(go.Scatter(x=np.arange(0, pmf.shape[0]), y=pmf, name="PMF"))
     fig.add_vline(x=mean, line_width=3, line_dash="dash", line_color="red", name="Mean")
+    fig.update_layout(margin=dict(l=20, r=20, t=30, b=30),
+                      xaxis_title="Delay [mins]", yaxis_title="Probability",
+                      title_text = "Predicted Arrival Delay - Probability Plot", title_x=0.5,)
     
     return fig
 # endregion

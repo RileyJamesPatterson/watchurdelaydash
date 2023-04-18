@@ -27,12 +27,12 @@ def getWeather(lon,lat,date):
     return {"temp":temp,"wind": wind,"rhum": humidity,"rain": precip,"snow": snow, "code":code}
 
 def getParacats(flights):
-    '''Takes a dataframe of flights and returns a a plotly parrallel catagory figure
+    '''Takes a dataframe of flights and returns a a plotly parallel catagory figure
     '''
         #bucket arrival delay into integer coding
     flights["BUCKETED_DELAY"]=pd.cut(
-        flights["ARR_DELAY"].fillna(9999), #replace nan with dummy var
-        bins=[-100,0,15,30,9998,9999], #bins correspend to [ontime,0-15,15-30,30+,cancelled]
+        flights["ARR_DELAY_NEW"].fillna(9999), #replace nan with dummy var
+        bins=[-100,15,30,60,9998,9999], #bins correspend to [ontime,0-15,15-30,30-60,60+,cancelled]
         labels=[0,1,2,3,4]   #CAN WE PREPROCESS THIS
     )
 
@@ -48,12 +48,13 @@ def getParacats(flights):
         label="Delay",
         categoryorder="array",
         categoryarray=[0,1,2,3,4],
-        ticktext=["On time", "0-15 Minutes","15-30 mins","30+ mins","Cancelled"]
+        ticktext=["0-15min","15-30min","30-60min","60+min","Cancelled"]
         )
 
     #create parcats trace
     color=flights["BUCKETED_DELAY"]
-    colorscale=["seagreen","khaki","orange","lightsalmon","darkred"]
+    #colorscale=["seagreen","khaki","orange","lightsalmon","darkred"]
+    colorscale=["#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494"]
     fig=go.Figure(
         data=[
             go.Parcats(
@@ -61,12 +62,15 @@ def getParacats(flights):
             line={"color":color,"colorscale":colorscale},
             hoveron="color",
             hoverinfo="count + probability",
-            labelfont={"size": 18,},
-            tickfont={"size": 16, },
+            labelfont={"size": 10,},
+            tickfont={"size": 10, },
             arrangement="freeform"
             )
         ]
     )
+    fig.update_layout(margin=dict(l=20, r=20, t=30, b=30),
+                      title_text="Parallel Category Plot - Airlines vs Arrival Delay",
+                      title_x=0.5,)
     return fig
 
 def get_all_flights_for_airport(dep_airport_iata, arr_airport_iata):
