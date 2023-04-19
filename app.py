@@ -3,11 +3,13 @@ import json
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from  plotly.subplots import make_subplots
 import numpy as np
 import utils
 from datetime import date,datetime,timedelta
 from inference_utils import get_prediction
 from statsmodels.iolib.smpickle import load_pickle
+from scipy.interpolate import make_interp_spline
 
 external_stylesheets = ['watch.css']
 logo_path='assets/logo.png'
@@ -69,7 +71,7 @@ dep_input_element=html.Div([
     "Departure Airport:",
     dcc.Dropdown(
         list(departures.keys()),
-        'ATL',
+        
         id='dep_select',
         ),
         
@@ -81,8 +83,8 @@ dep_input_element=html.Div([
 arr_input_elemnet=html.Div([
     "Arrival Airport:",
     dcc.Dropdown(
-        departures["ATL"]["allowed_destination"],
-        'ORD',
+        
+        
         id='arr_select',
         ),
     
@@ -106,6 +108,7 @@ date_input_element=html.Div([
     min=0,
     max=23,
     value=13,
+
     ),
           
     ],
@@ -194,15 +197,17 @@ app.layout = html.Div([
 #populate arrival dropdown when departure dropdown selected with airport connections
 @app.callback(
      Output("arr_select","options"),
+     Output("arr_select","value"),
      Input("dep_select","value"),   
 )
 def genConnections(departureA):
     #updates arrival airport dropdown label/value options
     dep_iata = departureA
     if dep_iata == "" or dep_iata == None:
-        return []
+        return [], None
     # returns list of dics of connecting flights in the form {label:<name>,value:<iata>}
-    return departures[dep_iata]["allowed_destination"]
+    
+    return departures[dep_iata]["allowed_destination"], None
 
 #update airport map when departure or arrival dropdowns populated
 @app.callback(
@@ -218,53 +223,82 @@ def genAirportMap(departureA,arrivalA):
 
     if dep_iata == None or dep_iata == "":
 
-        print("No airports selected")
         fig=go.Figure(data=go.Scattergeo(
         lon=f_airports["lon"],
         lat=f_airports["lat"],
         text=f_airports["name"],
         mode="markers",
+        marker=dict(
+            size=10,
+            color="#2c7fb8",
+            opacity=0.8,
+            line=dict(width=0.5, color='rgb(40,40,40)'),
+            sizemode="area"
+        ),
         ))
+        
         fig.update_layout(
-    #    title=departureA,
+        title_text='Airport Map', title_x=0.5,
         geo_scope="usa",
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(l=20, r=20, t=30, b=30),
         )
         return fig
     
-    
     #creates a column with map color based on selection status
     f_airports["selection"]="#636363"
-    f_airports.loc[departureA,"selection"]="#de2d26"
-    connections=f_airports.loc[departureA,"allowed_destination"]
+    f_airports.loc[dep_iata,"selection"]="#de2d26"
+    f_airports.loc[dep_iata,"marker_size"]=15
+
+    connections=f_airports.loc[dep_iata,"allowed_destination"]
+
     f_airports.loc[connections,"selection"]="#2c7fb8"
-    f_airports.loc[arrivalA,"selection"]="#fdae6b"
+
+    if arr_iata == None:
+        f_airports.loc[connections,"marker_size"]=10
+    else:
+        f_airports.loc[connections,"marker_size"]=7
+
+    f_airports.loc[arr_iata,"selection"]="#fdae6b"
+    f_airports.loc[arr_iata, "marker_size"]=15
+
 
     #Once user has selected a departure airport, non-connecting airports dropped from map
-    if departureA != "Departure Airport":
-        show_only=[*connections,departureA]
+    if dep_iata != "Departure Airport":
+        show_only=[*connections,dep_iata]
         f_airports=f_airports.loc[show_only]
-    fig=go.Figure(data=[go.Scattergeo(
+
+    fig=go.Figure(data=go.Scattergeo(
         lon=f_airports["lon"],
         lat=f_airports["lat"],
         text=f_airports["name"],
         mode="markers",
         marker_color=f_airports["selection"],
+        marker=dict(size=f_airports["marker_size"]),
         showlegend=False,name=""),
-        go.Scatter(x=[None], y=[None], mode='markers',
-                   marker=dict(size=8, color='#de2d26'),
-                   showlegend=True, name='Departure Airport'),
-        go.Scatter(x=[None], y=[None], mode='markers',
-                   marker=dict(size=8, color='#fdae6b'),
-                   showlegend=True, name='Arrival Airport'),
-        go.Scatter(x=[None], y=[None], mode='markers',
-                   marker=dict(size=8, color='#2c7fb8'),
-                   showlegend=True, name='Other Potential Arrival Airports')],
-                      )
+        )
+    if dep_iata != None:
+        fig.add_trace(go.Scattergeo(
+            lon=[f_airports.loc[dep_iata,"lon"]+2],
+            lat=[f_airports.loc[dep_iata,"lat"]],
+            mode="text",
+            text=[f_airports.loc[dep_iata,"iata"]],
+            textfont=dict(size=15),
+            name="",
+            ))
+    if arr_iata != None:
+        fig.add_trace(go.Scattergeo(
+            lon=[f_airports.loc[arr_iata,"lon"]+2],
+            lat=[f_airports.loc[arr_iata,"lat"]],
+            mode="text",
+            text=[f_airports.loc[arr_iata,"iata"]],
+            textfont=dict(size=15),
+            name="")
+            )
     fig.update_layout(
         title_text='Airport Map', title_x=0.5,
         geo_scope="usa",
         margin=dict(l=20, r=20, t=30, b=30),
+        showlegend=False,
         )
     
     fig.update_yaxes(minor_showgrid=False,visible=False, zeroline=False)
@@ -285,12 +319,21 @@ def updateViolin(departureA,arrivalA,depDate):
     fig = go.Figure()
 
     if arr_iata == None or dep_iata == None or dep_iata == "" or arr_iata == "":
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
         return fig
     
     flights = utils.get_all_flights_for_airport(dep_iata, arr_iata)
     flights = pd.concat(flights)
- 
-    return px.violin(flights,y="ARR_DELAY_NEW",box=True,points="all")
+    fig = px.violin(flights,y="ARR_DELAY_NEW",box=True,points="all")
+    # Add labels
+    fig.update_layout(
+        title_text='Historical Flight Delay Distribution', title_x=0.5,
+        xaxis_title="",
+        yaxis_title="Arrival Delay (Minutes)",
+        margin=dict(l=20, r=20, t=30, b=30),
+        )
+    return fig
     
 #Parrallel catagories plot of historical data
 @app.callback(
@@ -301,8 +344,12 @@ def updateViolin(departureA,arrivalA,depDate):
 )
 def updateParaPlot(departureA,arrivalA,depDate):
     dep_iata = departureA
-    if dep_iata == None or dep_iata == "":
-        return go.Figure()
+    arr_ia = arrivalA
+    if dep_iata == None or dep_iata == "" or arrivalA == None or arrivalA == "":
+        fig = go.Figure()
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
+        return fig
     
     flights2019=pd.read_json(f"assets/data/{dep_iata}_2019_flights.json")
     flights2020=pd.read_json(f"assets/data/{dep_iata}_2020_flights.json")
@@ -411,11 +458,14 @@ def updateWeather_arr(arrivalA,depDate,hourInput, _depA):
               Input('arrivalWeather', 'children'),
               )
 def predictions(depA,arrA,depDate,hourInput,depWeather,arrWeather):
-    fig = go.Figure()
+    fig = make_subplots(specs=[[{}], [{"secondary_y": True}]], rows=2, cols=1)
     dep_iata = depA
     arr_iata = arrA
     if dep_iata == None or arr_iata == None or dep_iata == "" or arr_iata == "":
-        return go.Figure()
+        fig = go.Figure()
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
+        return fig
     # get list of values in childrend from departureWeather
     depWeather = [child["props"]["children"] for child in depWeather][1:]
     arrWeather = [child["props"]["children"] for child in arrWeather][1:]
@@ -461,12 +511,27 @@ def predictions(depA,arrA,depDate,hourInput,depWeather,arrWeather):
 }
     
     mean, pmf = get_prediction(model, date_features, 60, inputs1)
+    X_Y_Spline = make_interp_spline(np.arange(0, pmf.shape[0]), pmf)
+    X_ = np.arange(0, pmf.shape[0], 0.01)
+    Y_ = X_Y_Spline(X_)
+    area = Y_*0.01
+    cum_area = np.cumsum(area)
+    prob = np.split(area, 4)
+    prob = [round(100*np.sum(p), 0) for p in prob]
+
+    labels = ["< 15 mins", "15-30 mins", "30-45 mins", "> 45 mins"]
+    prob_text = [str(int(p))+"%" for p in prob]
+
+    fig.add_trace(go.Bar(x=labels, y=prob, text=prob_text, name='Probability', textposition="auto"), row=1, col=1)
     
-    fig.add_trace(go.Scatter(x=np.arange(0, pmf.shape[0]), y=pmf, name="PMF"))
-    fig.add_vline(x=mean, line_width=3, line_dash="dash", line_color="red", name="Mean")
-    fig.update_layout(margin=dict(l=20, r=20, t=30, b=30),
-                      xaxis_title="Delay [mins]", yaxis_title="Probability",
-                      title_text = "Predicted Arrival Delay - Probability Plot", title_x=0.5,)
+    fig.add_trace(go.Scatter(x=X_, y=cum_area, mode='lines', name='CDF'),secondary_y=True, row=2, col=1)
+    
+    fig.add_trace(go.Scatter(x=X_, y=Y_, mode='lines', name='PMF'), secondary_y=False, row=2, col=1)
+    # fig.add_vline(x=mean, line_width=3, line_dash="dash", line_color="red", name="Mean")
+    fig.update_xaxes(title_text="Delay [mins]", row=2, col=1)
+    fig.update_layout(title_text="Delay Prediction", showlegend=True, title_x=0.5, margin=dict(l=20, r=20, t=30, b=20))
+
+
     
     return fig
 # endregion
