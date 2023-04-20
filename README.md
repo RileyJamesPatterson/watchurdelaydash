@@ -7,7 +7,7 @@ The application is accesible to only the people in Georgia Institute of Technolo
 We recommend using `Google Chrome` for accessing the web app.
 ### INSTALLATION
 NOTE: Ensure that `python version >= 3.8` is installed on your local machine and accesible in terminal under the command `python3`
-1. Download the contents of  [WatchUrDelay](https://gtvault.sharepoint.com/:u:/s/CSE6242-Spring23/EY3IYksgIbpIiMnGvriVuHEBXg8-XNfiZgRfe0voDj0g2w?e=ieIy18) package (must be logged in with GaTech credentials)
+1. Download the contents of  [WatchUrDelay](https://gtvault-my.sharepoint.com/:u:/g/personal/msingh359_gatech_edu/EWdmZLI9daNDqWIvJXG2o94B7TQmMpadwwxMqVNXQQ9RUQ) package (must be logged in with GaTech credentials)
 2. Extract the contents of the downloaded `.zip` package and open the extracted folder
 3. Open the terminal in the `WatchUrDelay` directory and run the commands below:
     ``` bash
