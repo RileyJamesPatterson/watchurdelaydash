@@ -1,8 +1,9 @@
-pandas
-dash
-plotly
-numpy
+pandas==1.5.2
+dash==2.7.0
+plotly==5.9.0
+numpy==1.23.5
 meteostat
-scipy
-statsmodels
+scipy==1.10.0
+statsmodels==0.13.5
+matplotlib==3.4.3
 

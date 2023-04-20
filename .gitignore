@@ -4,3 +4,5 @@ __pycache__/
 data/
 model/
 data_model.zip
+env/
+*.zip
